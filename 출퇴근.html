@@ -1,0 +1,1028 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>근태 시스템</title>
+<style>
+body{margin:0;font-family:Arial, sans-serif;display:flex;height:100vh}
+#sidebar{width:260px;background:#111827;color:white;padding:15px;box-sizing:border-box}
+.menu{padding:10px;margin:6px 0;background:#374151;border-radius:6px;cursor:pointer}
+.menu:hover{background:#4b5563}
+#main{flex:1;padding:20px;overflow:auto}
+.panel{display:none}.active{display:block}
+table{width:100%;border-collapse:collapse;margin-top:10px}
+th,td{border:1px solid #ddd;padding:10px;text-align:center}
+th{background:#f3f4f6}
+.work{background:#ffd6e7}
+.other-month{color:#9ca3af}
+.box{margin-top:15px;padding:10px;border:1px solid #ddd}
+textarea,input{box-sizing:border-box;width:100%;padding:8px;margin:5px 0}
+button{padding:7px 12px;margin:5px 3px;cursor:pointer}
+.green{color:green;font-weight:bold}
+.red{color:red;font-weight:bold}
+.blue{color:#2563eb;font-weight:bold}
+.legend-row{position:relative;text-align:center}
+.legend-row .red{position:absolute;left:3em;top:50%;transform:translateY(-50%)}
+.dropzone{border:2px dashed #aaa;padding:20px;text-align:center;color:#666;margin-top:10px;cursor:pointer}
+#photoPreview img{max-width:240px;max-height:180px;margin-top:8px;border:1px solid #ddd}
+#photoStatus{margin-left:8px;color:#666}
+.auto-hint{margin-left:8px;color:#666;font-size:0.9em}
+.calendar-title{text-align:center;font-size:2.4em;font-weight:bold;margin:0 0 16px}
+.calendar-controls{margin-bottom:10px}
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <h3>근태 시스템</h3>
+  <div class="menu" onclick="show('main')">메인</div>
+  <div class="menu" onclick="show('work')">근무기본사항</div>
+  <div class="menu" onclick="show('note')">특기사항 입력</div>
+  <div class="menu" onclick="show('list')">특기사항 조회</div>
+  <div class="menu" onclick="show('setting')">설정</div>
+</div>
+
+<div id="main">
+
+<div id="mainPanel" class="panel active">
+  <div class="calendar-controls">
+    <select id="year"></select>
+    <select id="month"></select>
+    <span class="auto-hint">월·연도 변경 시 특기사항을 반영하여 자동 갱신</span>
+  </div>
+  <div id="calendarTitle" class="calendar-title"></div>
+  <div id="calendar"></div>
+
+  <div class="box legend-row">
+    <b class="red">분홍색 배경 : 출근하는 날</b>
+    <span class="blue">원하는 날짜를 클릭하면 해당일의 출근부 확인 가능함</span>
+  </div>
+
+  <div class="box">
+    <b>오늘 출근 상황부</b>
+    <div id="todayBox"></div>
+  </div>
+
+  <div id="selectedPanel" class="box" style="display:none">
+    <b id="selectedTitle"></b>
+    <div id="selectedBox"></div>
+  </div>
+</div>
+
+<div id="workPanel" class="panel">
+  <h2>근무기본사항</h2>
+
+  <b>요일별 출근/퇴근담당</b>
+  <div id="workBox"></div>
+  <button onclick="editWork()">수정</button>
+  <button onclick="saveWork()">저장</button>
+
+  <hr>
+
+  <b>주별 근무 요일</b>
+  <div id="ruleBox"></div>
+  <button onclick="editRule()">수정</button>
+  <button onclick="saveRule()">저장</button>
+</div>
+
+<div id="notePanel" class="panel">
+  <h2>특기사항 입력</h2>
+
+  <b>텍스트 입력</b>
+  <div>“해당 기간/대상자/특기 사항/변경 사항” 형식. 휴가·병가·교육은 자동 미출근(도장 담당은 별도 기재)</div>
+  <textarea id="noteInput" rows="4" placeholder="2026.06.11 ~ 2026.06.25/박진배/병가/미출근 및 퇴근도장 담당 불가"></textarea>
+  <button onclick="saveNote()">저장</button>
+
+  <hr>
+
+  <b>사진 입력</b>
+  <div>사진과 설명을 함께 입력한 뒤 저장하면 AI가 분석하여 특기사항으로 등록합니다.</div>
+  <div id="dropzone" class="dropzone">사진을 드래그 앤 드랍하거나 클릭하여 선택</div>
+  <input id="photoFile" type="file" accept="image/*" style="display:none">
+  <div id="photoPreview"></div>
+  <label>사진 설명 (직접 입력)</label>
+  <textarea id="photoDesc" rows="3" placeholder="예: 박진배 2026.06.11~06.25 병가, 미출근, 퇴근도장 담당 불가. 출근도장은 송정용이 대체"></textarea>
+  <button id="photoSaveBtn" onclick="savePhotoNote()" disabled>저장</button>
+  <span id="photoStatus"></span>
+</div>
+
+<div id="listPanel" class="panel">
+  <h2>특기사항 조회</h2>
+
+  <b>등록번호/해당 기간/대상자/특기 사항/변경 사항</b>
+  <textarea id="noteBox" rows="12" readonly></textarea>
+
+  <br>
+  <button onclick="editNotes()">수정</button>
+  <span id="editBtns" style="display:none;">
+    <button onclick="cancelNotes()">취소</button>
+    <button onclick="saveNotes()">저장</button>
+  </span>
+</div>
+
+<div id="settingPanel" class="panel">
+  <h2>설정</h2>
+
+  <div id="saveStatus" class="green"></div>
+  <label>Gemini API Key</label>
+  <input id="geminiKey" type="password" placeholder="Gemini API Key 입력">
+  <br>
+  <label>Gemini 모델</label>
+  <select id="geminiModel"></select>
+  <button onclick="saveGeminiKey()">저장</button>
+  <button onclick="testGeminiKey()">테스트</button>
+  <span id="testStatus" class="green"></span>
+</div>
+
+</div>
+
+<script>
+function show(id){
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById(id+'Panel').classList.add('active');
+  reloadNotes();
+  renderNotes();
+  if(id==="main")draw();
+}
+
+let work = JSON.parse(localStorage.getItem("work")) || {
+  화:{in:"송정용",out:"김영구"},
+  수:{in:"차준호",out:"양준모"},
+  목:{in:"선형종",out:"박진배"}
+};
+
+let rule = JSON.parse(localStorage.getItem("rule")) || {
+  odd:"화/수/목 (1,3,5주)",
+  even:"수/목 (2,4주)"
+};
+
+let notes = JSON.parse(localStorage.getItem("notes")||"[]");
+let selectedDate = null;
+
+const TEAM=["송정용","김영구","차준호","양준모","선형종","박진배"];
+const DAY_NAMES=["일","월","화","수","목","금","토"];
+
+// 화요일 근무 정책: 2026.07.01 이전 모든 화요일은 근무일(출근), 이후 둘째·넷째 화요일만 근무일
+const TUESDAY_POLICY_CUTOFF=new Date(2026,6,1);
+const TUESDAY_POLICY_NTH=[2,4];
+
+const GEMINI_MODELS=[
+  {id:"gemini-2.5-flash",label:"Gemini 2.5 Flash",paid:false},
+  {id:"gemini-2.5-flash-lite",label:"Gemini 2.5 Flash-Lite",paid:false},
+  {id:"gemini-2.5-pro",label:"Gemini 2.5 Pro",paid:false},
+  {id:"gemini-3.5-flash",label:"Gemini 3.5 Flash",paid:false},
+  {id:"gemini-3.1-flash-lite",label:"Gemini 3.1 Flash-Lite",paid:false},
+  {id:"gemini-3.1-pro-preview",label:"Gemini 3.1 Pro",paid:true}
+];
+
+const y=document.getElementById("year");
+const m=document.getElementById("month");
+[2026,2027].forEach(v=>y.innerHTML+=`<option>${v}</option>`);
+for(let i=1;i<=12;i++)m.innerHTML+=`<option>${i}</option>`;
+const now=new Date();
+y.value=now.getFullYear();
+m.value=now.getMonth()+1;
+[y,m].forEach(el=>el.addEventListener("change",draw));
+
+function makeId(){
+  const n=new Date();
+  return n.getFullYear()
+    +String(n.getMonth()+1).padStart(2,"0")
+    +String(n.getDate()).padStart(2,"0")
+    +String(n.getHours()).padStart(2,"0")
+    +String(n.getMinutes()).padStart(2,"0")
+    +String(n.getSeconds()).padStart(2,"0");
+}
+
+function renderWork(){
+  document.getElementById("workBox").innerHTML=`
+    <table>
+      <tr><th>요일</th><th>출퇴근 도장 담당</th></tr>
+      <tr><td>화요일</td><td>${work.화.in} / ${work.화.out}</td></tr>
+      <tr><td>수요일</td><td>${work.수.in} / ${work.수.out}</td></tr>
+      <tr><td>목요일</td><td>${work.목.in} / ${work.목.out}</td></tr>
+    </table>`;
+}
+
+function editWork(){
+  document.getElementById("workBox").innerHTML=`
+    <table>
+      <tr><th>요일</th><th>출근담당</th><th>퇴근담당</th></tr>
+      ${["화","수","목"].map(d=>`
+      <tr>
+        <td>${d}요일</td>
+        <td><input data-d="${d}" data-t="in" value="${work[d].in}"></td>
+        <td><input data-d="${d}" data-t="out" value="${work[d].out}"></td>
+      </tr>`).join("")}
+    </table>`;
+}
+
+function saveWork(){
+  document.querySelectorAll("#workBox input").forEach(i=>{
+    work[i.dataset.d][i.dataset.t]=i.value;
+  });
+  localStorage.setItem("work",JSON.stringify(work));
+  renderWork();
+  draw();
+}
+
+function renderRule(){
+  document.getElementById("ruleBox").innerHTML=`
+    <table>
+      <tr><th>주</th><th>근무 요일</th></tr>
+      <tr><td>홀수주</td><td>${rule.odd}</td></tr>
+      <tr><td>짝수주</td><td>${rule.even}</td></tr>
+    </table>`;
+}
+
+function editRule(){
+  document.getElementById("ruleBox").innerHTML=`
+    <table>
+      <tr><th>주</th><th>근무 요일</th></tr>
+      <tr><td>홀수주</td><td><input id="odd" value="${rule.odd}"></td></tr>
+      <tr><td>짝수주</td><td><input id="even" value="${rule.even}"></td></tr>
+    </table>`;
+}
+
+function saveRule(){
+  rule.odd=document.getElementById("odd").value;
+  rule.even=document.getElementById("even").value;
+  localStorage.setItem("rule",JSON.stringify(rule));
+  renderRule();
+  draw();
+}
+
+function sanitizeNoteLine(line){
+  return String(line).replace(/\r/g,"").replace(/\n/g," ").replace(/\s+/g," ").trim();
+}
+
+function mergeNoteLines(lines){
+  const merged=[];
+  for(const line of lines){
+    const t=sanitizeNoteLine(line);
+    if(!t)continue;
+    if(/^\d{14}\//.test(t))merged.push(t);
+    else if(merged.length)merged[merged.length-1]+=" "+t;
+    else merged.push(t);
+  }
+  return merged;
+}
+
+function reloadNotes(){
+  const raw=JSON.parse(localStorage.getItem("notes")||"[]");
+  notes=mergeNoteLines(raw);
+  if(notes.length!==raw.length)localStorage.setItem("notes",JSON.stringify(notes));
+}
+
+function saveNote(){
+  const text=sanitizeNoteLine(document.getElementById("noteInput").value);
+  if(!text){alert("내용을 입력하세요.");return;}
+  reloadNotes();
+  notes.push(`${makeId()}/${text}`);
+  localStorage.setItem("notes",JSON.stringify(notes));
+  document.getElementById("noteInput").value="";
+  renderNotes();
+  draw();
+  alert("저장 완료");
+}
+
+function renderNotes(){
+  reloadNotes();
+  document.getElementById("noteBox").value=notes.join("\n");
+}
+
+function editNotes(){
+  reloadNotes();
+  renderNotes();
+  document.getElementById("noteBox").readOnly=false;
+  document.getElementById("editBtns").style.display="inline";
+}
+
+function cancelNotes(){
+  document.getElementById("noteBox").readOnly=true;
+  document.getElementById("editBtns").style.display="none";
+  renderNotes();
+}
+
+function saveNotes(){
+  const merged=mergeNoteLines(document.getElementById("noteBox").value.split("\n"));
+  notes=merged.map(line=>{
+    if(/^\d{14}\//.test(line))return line;
+    return `${makeId()}/${line}`;
+  });
+  localStorage.setItem("notes",JSON.stringify(notes));
+  document.getElementById("noteBox").readOnly=true;
+  document.getElementById("editBtns").style.display="none";
+  renderNotes();
+  draw();
+  alert("저장 완료");
+}
+
+let pendingPhotoFile=null;
+
+function setPendingPhoto(file){
+  pendingPhotoFile=file;
+  const preview=document.getElementById("photoPreview");
+  if(!file){
+    preview.innerHTML="";
+    document.getElementById("photoSaveBtn").disabled=true;
+    return;
+  }
+  const url=URL.createObjectURL(file);
+  preview.innerHTML=`<div>${file.name}</div><img src="${url}" alt="미리보기">`;
+  document.getElementById("photoSaveBtn").disabled=false;
+}
+
+const drop=document.getElementById("dropzone");
+const photoFileInput=document.getElementById("photoFile");
+drop.addEventListener("click",()=>photoFileInput.click());
+drop.addEventListener("dragover",e=>{e.preventDefault();drop.style.background="#f3f4f6";});
+drop.addEventListener("dragleave",()=>drop.style.background="white");
+drop.addEventListener("drop",e=>{
+  e.preventDefault();
+  drop.style.background="white";
+  const file=e.dataTransfer.files[0];
+  if(file&&file.type.startsWith("image/"))setPendingPhoto(file);
+});
+photoFileInput.addEventListener("change",e=>{
+  const file=e.target.files[0];
+  if(file)setPendingPhoto(file);
+});
+document.getElementById("photoDesc").addEventListener("input",()=>{
+  document.getElementById("photoSaveBtn").disabled=!pendingPhotoFile&&!document.getElementById("photoDesc").value.trim();
+});
+
+function getGeminiConfig(){
+  const raw=localStorage.getItem("geminiKeyEncoded");
+  if(!raw)return null;
+  return{
+    key:atob(raw),
+    model:localStorage.getItem("geminiModel")||"gemini-2.5-flash"
+  };
+}
+
+function fileToBase64(file){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=()=>resolve(reader.result.split(",")[1]);
+    reader.onerror=reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function geminiGenerate(parts){
+  const cfg=getGeminiConfig();
+  if(!cfg)throw new Error("API 키 없음");
+  const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${cfg.model}:generateContent?key=${cfg.key}`,{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({contents:[{parts}]})
+  });
+  if(!res.ok)throw new Error("API 실패");
+  const data=await res.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim()||"";
+}
+
+async function analyzePhotoWithGemini(file){
+  const base64=await fileToBase64(file);
+  const mime=file.type||"image/jpeg";
+  const prompt=`이 이미지에서 근태·출퇴근 관련 정보를 추출하세요.
+기간, 대상자 이름, 특기사항(병가/휴가/교육 등), 변경사항(미출근, 출근도장/퇴근도장 담당 불가, 대체 담당자 등)을 한국어로 간결히 요약하세요.`;
+  return geminiGenerate([{text:prompt},{inline_data:{mime_type:mime,data:base64}}]);
+}
+
+function findPersonInText(text){
+  let best=null,bestIdx=Infinity;
+  TEAM.forEach(n=>{
+    const idx=text.indexOf(n);
+    if(idx>=0&&idx<bestIdx){best=n;bestIdx=idx;}
+  });
+  return best||"미상";
+}
+
+function normalizeTeamName(name){
+  if(TEAM.includes(name))return name;
+  const trimmed=name.replace(/(이|가)$/,"");
+  return TEAM.includes(trimmed)?trimmed:null;
+}
+
+function splitNoteSegments(text){
+  return text.split(/[,，;；\n]|(?:\s*및\s*)|\.\s+/).map(s=>s.trim()).filter(Boolean);
+}
+
+function matchInSegments(text,pattern){
+  return splitNoteSegments(text).some(seg=>pattern.test(seg));
+}
+
+function fallbackStructureNote(text){
+  const person=findPersonInText(text);
+  const range=text.match(/(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})\s*[~\-–]\s*(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})/);
+  let period="";
+  if(range)period=`${range[1]}.${range[2].padStart(2,"0")}.${range[3].padStart(2,"0")} ~ ${range[4]}.${range[5].padStart(2,"0")}.${range[6].padStart(2,"0")}`;
+  else{
+    const single=text.match(/(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})/);
+    if(single)period=`${single[1]}.${single[2].padStart(2,"0")}.${single[3].padStart(2,"0")} ~ ${single[1]}.${single[2].padStart(2,"0")}.${single[3].padStart(2,"0")}`;
+  }
+  let reason="";
+  if(/병가/.test(text))reason="병가";
+  else if(/휴가/.test(text))reason="휴가";
+  else if(/교육/.test(text))reason="교육";
+  const changes=[];
+  if(/미출근|출근\s*안|결근|불참/.test(text))changes.push("미출근");
+  if(matchInSegments(text,/출퇴근.*도장.*담당.*불가|출퇴근.*담당.*불가/))changes.push("출퇴근도장 담당 불가");
+  else{
+    if(matchInSegments(text,/출근.*도장.*담당.*불가|출근.*담당.*불가/))changes.push("출근도장 담당 불가");
+    if(matchInSegments(text,/퇴근.*도장.*담당.*불가|퇴근.*담당.*불가/))changes.push("퇴근도장 담당 불가");
+  }
+  splitNoteSegments(text).forEach(seg=>{
+    const s=seg.trim();
+    const inSub=s.match(/출근(?:도장)?\s*(?:담당\s*)?대체(?:자)?\s*[:：]?\s*([가-힣]+)/)
+      ||s.match(/출근(?:도장)?(?:은|는)?\s*([가-힣]+)\s*(?:가|이)?\s*대체/)
+      ||s.match(/([가-힣]+)\s*(?:가|이)\s*출근(?:도장)?\s*대체/);
+    if(inSub){const n=normalizeTeamName(inSub[1]);if(n&&!changes.some(c=>c.startsWith("출근도장 담당:")))changes.push(`출근도장 담당:${n}`);}
+    const outSub=s.match(/퇴근(?:도장)?\s*(?:담당\s*)?대체(?:자)?\s*[:：]?\s*([가-힣]+)/)
+      ||s.match(/퇴근(?:도장)?(?:은|는)?\s*([가-힣]+)\s*(?:가|이)?\s*대체/)
+      ||s.match(/([가-힣]+)\s*(?:가|이)\s*퇴근(?:도장)?\s*대체/);
+    if(outSub){const n=normalizeTeamName(outSub[1]);if(n&&!changes.some(c=>c.startsWith("퇴근도장 담당:")))changes.push(`퇴근도장 담당:${n}`);}
+  });
+  return `${period||"기간미상"}/${person}/${reason||"특기사항"}/${changes.join(" 및 ")||text.trim()}`;
+}
+
+function preserveOriginalInNote(structured,original){
+  const s=sanitizeNoteLine(structured);
+  const o=sanitizeNoteLine(original);
+  if(!o||o.length<=s.length+10||s.includes(o))return s;
+  const idx=s.indexOf("/");
+  if(idx<0)return `${s} [원문:${o}]`;
+  const body=s.slice(idx+1);
+  const parts=body.split("/");
+  if(parts.length>=4){
+    const change=parts.slice(3).join("/");
+    return `${s.slice(0,idx+1)}${parts[0]}/${parts[1]}/${parts[2]}/${change} [원문:${o}]`;
+  }
+  if(parts.length===3)return `${s.slice(0,idx+1)}${parts[0]}/${parts[1]}/${parts[2]} [원문:${o}]`;
+  return `${s} [원문:${o}]`;
+}
+
+async function structureNoteText(combinedText){
+  const cfg=getGeminiConfig();
+  if(cfg){
+    try{
+      const prompt=`다음 근태 특기사항을 표준 형식 한 줄로 변환하세요.
+형식: 기간/대상자/특기사항/변경사항
+대상자 후보: ${TEAM.join(", ")}
+기간: YYYY.MM.DD ~ YYYY.MM.DD
+변경사항 예: 출근도장 담당 불가, 퇴근도장 담당 불가, 출근도장 담당:이름, 퇴근도장 담당:이름
+규칙:
+- 특기사항이 휴가/병가/교육이면 해당 기간 미출근으로 처리(변경사항에 미출근 문구는 생략 가능).
+- 미출근이어도 출근도장·퇴근도장 담당은 가능. 담당 불가는 변경사항에 명시된 경우만.
+- 변경사항에 입력의 날짜·대체·도장·조건 등 세부 내용을 빠짐없이 포함하세요. 요약으로 삭제하지 마세요.
+- 슬래시 4필드 한 줄만 출력. 줄바꿈 금지.
+
+입력:
+${combinedText}`;
+      const result=await geminiGenerate([{text:prompt}]);
+      const line=sanitizeNoteLine((result.replace(/```/g,"").trim().split("\n").find(l=>l.includes("/"))||result));
+      if(line.split("/").length>=4)return preserveOriginalInNote(line,combinedText);
+    }catch(e){}
+  }
+  return preserveOriginalInNote(fallbackStructureNote(combinedText),combinedText);
+}
+
+async function savePhotoNote(){
+  const desc=document.getElementById("photoDesc").value.trim();
+  if(!pendingPhotoFile&&!desc){alert("사진 또는 설명을 입력하세요.");return;}
+  const status=document.getElementById("photoStatus");
+  const btn=document.getElementById("photoSaveBtn");
+  btn.disabled=true;
+  status.innerText="분석 중...";
+  try{
+    let photoText="";
+    if(pendingPhotoFile){
+      try{photoText=await analyzePhotoWithGemini(pendingPhotoFile);}
+      catch(e){photoText=pendingPhotoFile?`[사진:${pendingPhotoFile.name}]`:"";}
+    }
+    const combined=[desc&&`[직접입력] ${desc}`,photoText&&`[사진분석] ${photoText}`].filter(Boolean).join("\n");
+    const structured=await structureNoteText(combined);
+    reloadNotes();
+    const id=makeId();
+    notes.push(`${id}/${structured}`);
+    localStorage.setItem("notes",JSON.stringify(notes));
+    document.getElementById("photoDesc").value="";
+    setPendingPhoto(null);
+    photoFileInput.value="";
+    renderNotes();
+    draw();
+    status.innerText="등록 완료";
+    alert(`등록 완료\n등록번호: ${id}\n${structured}`);
+  }catch(e){
+    status.innerText="실패";
+    alert("저장 실패: "+(e.message||"오류"));
+  }finally{
+    btn.disabled=!pendingPhotoFile&&!document.getElementById("photoDesc").value.trim();
+  }
+}
+
+function week(d){
+  const f=new Date(d.getFullYear(),d.getMonth(),1);
+  return Math.ceil((d.getDate()+f.getDay()-1)/7);
+}
+
+function dateOnly(d){
+  return new Date(d.getFullYear(),d.getMonth(),d.getDate());
+}
+
+function whichNthWeekday(date){
+  const wd=date.getDay();
+  let n=0;
+  for(let d=1;d<=date.getDate();d++){
+    if(new Date(date.getFullYear(),date.getMonth(),d).getDay()===wd)n++;
+  }
+  return n;
+}
+
+function applyTuesdayPolicyToWork(date){
+  if(date.getDay()!==2)return null;
+  const d=dateOnly(date).getTime();
+  const cutoff=dateOnly(TUESDAY_POLICY_CUTOFF).getTime();
+  const nth=whichNthWeekday(date);
+  if(d<cutoff)return true;
+  if(d>=cutoff&&TUESDAY_POLICY_NTH.includes(nth))return true;
+  return null;
+}
+
+function isWork(date){
+  const tuePolicy=applyTuesdayPolicyToWork(date);
+  if(tuePolicy===true)return true;
+  const day=date.getDay();
+  const w=week(date);
+  const odd=w%2===1;
+  if(day===0||day===1||day===5||day===6)return false;
+  return odd ? (day===2||day===3||day===4) : (day===3||day===4);
+}
+
+function formatCalendarLabel(date,showMonth){
+  return showMonth?`${date.getMonth()+1}/${date.getDate()}`:`${date.getDate()}`;
+}
+
+function calendarCell(date,showMonth,otherMonth){
+  const cls=[isWork(date)?"work":"",otherMonth?"other-month":""].filter(Boolean).join(" ");
+  const y=date.getFullYear(),mo=date.getMonth(),d=date.getDate();
+  return `<td class="${cls}" onclick="selectDate(${y},${mo},${d})">${formatCalendarLabel(date,showMonth)}</td>`;
+}
+
+function updateCalendarTitle(){
+  document.getElementById("calendarTitle").innerText=`${m.value}월 임피 출근부`;
+}
+
+function draw(){
+  updateCalendarTitle();
+  const year=+y.value,month=+m.value;
+  const first=new Date(year,month-1,1);
+  const last=new Date(year,month,0);
+  const prevLast=new Date(year,month-1,0);
+  let html="<table><tr>";
+  ["일","월","화","수","목","금","토"].forEach(d=>html+=`<th>${d}</th>`);
+  html+="</tr><tr>";
+  for(let i=0;i<first.getDay();i++){
+    const d=prevLast.getDate()-(first.getDay()-1-i);
+    html+=calendarCell(new Date(year,month-2,d),i===0,true);
+  }
+  for(let d=1;d<=last.getDate();d++){
+    const dt=new Date(year,month-1,d);
+    html+=calendarCell(dt,false,false);
+    if(dt.getDay()===6)html+="</tr><tr>";
+  }
+  for(let i=0;i<6-last.getDay();i++){
+    html+=calendarCell(new Date(year,month,i+1),i===0,true);
+  }
+  html+="</tr></table>";
+  document.getElementById("calendar").innerHTML=html;
+  refreshAttendancePanels();
+}
+
+function isSameDay(a,b){
+  return a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate();
+}
+
+function hideSelectedPanel(){
+  selectedDate=null;
+  document.getElementById("selectedPanel").style.display="none";
+}
+
+function refreshAttendancePanels(){
+  reloadNotes();
+  updateToday(new Date());
+  hideSelectedPanel();
+}
+
+function dateTitle(date){
+  return `${date.getFullYear()}년 ${date.getMonth()+1}월 ${date.getDate()}일 (${DAY_NAMES[date.getDay()]})`;
+}
+
+function parseNoteLine(line){
+  const clean=sanitizeNoteLine(line);
+  const idx=clean.indexOf("/");
+  if(idx<0)return null;
+  const body=clean.slice(idx+1).replace(/\s*\[원문:[^\]]*\]\s*$/,"");
+  if(body.startsWith("사진입력/"))return null;
+  const parts=body.split("/");
+  if(parts.length<3)return null;
+  if(parts.length>=4){
+    return {
+      period:parts[0].trim(),
+      person:parts[1].trim(),
+      reason:parts[2].trim(),
+      change:parts.slice(3).join("/").trim()
+    };
+  }
+  return {
+    period:parts[0].trim(),
+    person:parts[1].trim(),
+    reason:"",
+    change:parts[2].trim()
+  };
+}
+
+function parsePersons(personStr){
+  return personStr.split(/[,，]/).map(s=>s.trim()).filter(Boolean)
+    .map(n=>normalizeTeamName(n)||n).filter(n=>TEAM.includes(n));
+}
+
+function parsePeriod(periodStr){
+  const range=periodStr.match(/(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})\s*[~\-–]\s*(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})/);
+  if(range){
+    return {
+      start:new Date(+range[1],+range[2]-1,+range[3]),
+      end:new Date(+range[4],+range[5]-1,+range[6])
+    };
+  }
+  const single=periodStr.match(/(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})/);
+  if(single){
+    const d=new Date(+single[1],+single[2]-1,+single[3]);
+    return {start:d,end:d};
+  }
+  return null;
+}
+
+function dateInPeriod(date,period){
+  if(!period)return false;
+  const t=new Date(date.getFullYear(),date.getMonth(),date.getDate()).getTime();
+  const s=new Date(period.start.getFullYear(),period.start.getMonth(),period.start.getDate()).getTime();
+  const e=new Date(period.end.getFullYear(),period.end.getMonth(),period.end.getDate()).getTime();
+  return t>=s&&t<=e;
+}
+
+function getNotesForDate(date){
+  return notes.map(parseNoteLine).filter(n=>{
+    if(!n)return false;
+    return dateInPeriod(date,parsePeriod(n.period));
+  });
+}
+
+function parseChange(change,reason){
+  const c=(change||"")+" "+(reason||"");
+  const result={
+    absent:false,
+    noInStamp:false,
+    noOutStamp:false,
+    inSubstitute:null,
+    outSubstitute:null,
+    reason:reason||""
+  };
+  if(matchInSegments(c,/출퇴근.*도장.*담당.*불가|출퇴근.*담당.*불가/)){
+    result.noInStamp=true;
+    result.noOutStamp=true;
+  }
+  const canSubstitute=/대체하기도 함|담당자로\s*대체|대체(?:자)?\s*(?:로|하기도|함)|(?:가|이)\s*대체/.test(c);
+  if(matchInSegments(c,/출근.*도장.*담당.*불가|출근.*담당.*불가/)&&!canSubstitute){
+    result.noInStamp=true;
+  }
+  if(matchInSegments(c,/퇴근.*도장.*담당.*불가|퇴근.*담당.*불가/)&&!canSubstitute){
+    result.noOutStamp=true;
+  }
+  if(/미출근|출근\s*안|결근|불참/.test(c)){
+    result.absent=true;
+  }else if(/휴가|병가|교육/.test(reason||"")){
+    result.absent=true;
+  }
+  splitNoteSegments(c).forEach(seg=>{
+    const s=seg.trim();
+    const inPatterns=[
+      /출근(?:도장)?(?:은|는)\s*([가-힣]+)\s*(?:가|이)?\s*대체/,
+      /출근(?:도장)?\s*(?:담당)?\s*[:：→]\s*([가-힣]+)/,
+      /출근(?:도장)?\s*(?:담당\s*)?대체(?:자)?\s*[:：]?\s*([가-힣]+)/,
+      /출근(?:도장)?(?:은|는)?\s*([가-힣]+)\s*(?:가|이)?\s*대체/,
+      /([가-힣]+)\s*(?:가|이)\s*출근(?:도장)?\s*대체/
+    ];
+    for(const re of inPatterns){
+      const mt=s.match(re);
+      if(mt){const n=normalizeTeamName(mt[1]);if(n){result.inSubstitute=n;break;}}
+    }
+    const outPatterns=[
+      /퇴근(?:도장)?\s*담당(?:은|는)?\s*([가-힣]+)\s*(?:가|이)?\s*대체/,
+      /퇴근(?:도장)?\s*(?:담당)?\s*[:：→]\s*([가-힣]+)/,
+      /퇴근(?:도장)?\s*(?:담당\s*)?대체(?:자)?\s*[:：]?\s*([가-힣]+)/,
+      /퇴근(?:도장)?(?:은|는)?\s*([가-힣]+)\s*(?:가|이)?\s*대체/,
+      /([가-힣]+)(?:이|가)?\s*(?:이\s*기간|기간\s*동안).*?퇴근(?:도장)?\s*(?:담당(?:자)?)?\s*(?:로\s*)?대체/,
+      /([가-힣]+)\s*(?:가|이)\s*퇴근(?:도장)?\s*대체/
+    ];
+    for(const re of outPatterns){
+      const mt=s.match(re);
+      if(mt){const n=normalizeTeamName(mt[1]);if(n){result.outSubstitute=n;break;}}
+    }
+  });
+  return result;
+}
+
+function buildPersonStates(date){
+  const state={};
+  TEAM.forEach(name=>{
+    state[name]={absent:false,reason:"",noInStamp:false,noOutStamp:false};
+  });
+  getNotesForDate(date).forEach(note=>{
+    const ch=parseChange(note.change,note.reason);
+    const persons=parsePersons(note.person);
+    const targets=persons.length?persons:[note.person];
+    targets.forEach(person=>{
+      if(!state[person]){
+        state[person]={absent:false,reason:"",noInStamp:false,noOutStamp:false};
+      }
+      if(ch.absent){
+        state[person].absent=true;
+        state[person].reason=note.reason||ch.reason;
+      }
+      if(ch.noInStamp)state[person].noInStamp=true;
+      if(ch.noOutStamp)state[person].noOutStamp=true;
+    });
+  });
+  applyTuesdayPolicyToAttendance(date,state);
+  return state;
+}
+
+function applyTuesdayPolicyToAttendance(date,state){
+  // 화요일 근무일(출근 표기)은 TUESDAY_POLICY_* 상수로 달력에만 적용. 개인별 미출근은 특기사항 유지.
+}
+
+function clauseMatchesDate(date,clause){
+  const year=date.getFullYear();
+  const month=date.getMonth()+1;
+  const day=date.getDate();
+  const fullDates=[...clause.matchAll(/(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})/g)];
+  if(fullDates.length){
+    return fullDates.some(m=>+m[1]===year&&+m[2]===month&&+m[3]===day);
+  }
+  const range=clause.match(/(\d{1,2})\s*월\s*(\d{1,2})\s*일\s*(\d{1,2})\s*일/);
+  if(range&&+range[1]===month){
+    const d1=+range[2],d2=+range[3];
+    return day>=d1&&day<=d2;
+  }
+  const days=[...clause.matchAll(/(\d{1,2})\s*월\s*(\d{1,2})\s*일/g)];
+  if(days.length){
+    return days.some(m=>+m[1]===month&&+m[2]===day);
+  }
+  return true;
+}
+
+function extractDateDutySchedule(change,date){
+  const text=change||"";
+  const day=date.getDate();
+  const month=date.getMonth()+1;
+  const result={in:null,out:null};
+  const hasIn=/출근(?:도장)?/.test(text);
+  const hasOut=/퇴근(?:도장)?/.test(text);
+  if(!hasIn&&!hasOut)return result;
+
+  let target="in";
+  if(hasOut&&!hasIn)target="out";
+  else if(hasIn&&hasOut){
+    if(/퇴근(?:도장)?.*(?:바꿈|교대|날짜)/.test(text)&&!/출근(?:도장)?.*(?:바꿈|교대|날짜)/.test(text))target="out";
+    else target="in";
+  }
+
+  function setName(name){
+    const n=normalizeTeamName(name);
+    if(n)result[target]=n;
+  }
+  [...text.matchAll(/(\d{1,2})\s*월\s*(\d{1,2})\s*일\s*([가-힣]+)/g)].forEach(m=>{
+    if(+m[1]===month&&+m[2]===day)setName(m[3]);
+  });
+  [...text.matchAll(/(\d{1,2})\s*일\s*([가-힣]+)/g)].forEach(m=>{
+    if(+m[1]===day)setName(m[2]);
+  });
+  return result;
+}
+
+function extractSubstituteFromChange(change,date){
+  const result={in:null,out:null};
+  const segments=splitNoteSegments(change);
+  segments.forEach(seg=>{
+    if(!clauseMatchesDate(date,seg))return;
+    const inPatterns=[
+      /출근(?:도장)?(?:은|는)\s*([가-힣]+)\s*(?:가|이)?\s*대체/,
+      /출근(?:도장)?\s*담당(?:은|는)?\s*([가-힣]+)\s*(?:가|이)?\s*대체/,
+      /출근(?:도장)?\s*(?:담당)?\s*[:：→]\s*([가-힣]+)/,
+      /출근(?:도장)?\s*(?:담당\s*)?대체(?:자)?\s*[:：]?\s*([가-힣]+)/,
+      /출근(?:도장)?(?:은|는)?\s*([가-힣]+)\s*(?:가|이)?\s*대체/,
+      /([가-힣]+)(?:이|가)?\s*(?:이\s*기간|기간\s*동안).*?출근(?:도장)?\s*(?:담당(?:자)?)?\s*(?:로\s*)?대체/,
+      /([가-힣]+)\s*(?:가|이)\s*출근(?:도장)?\s*대체/
+    ];
+    for(const re of inPatterns){
+      const mt=seg.match(re);
+      if(mt){const n=normalizeTeamName(mt[1]);if(n){result.in=n;break;}}
+    }
+    const outPatterns=[
+      /퇴근(?:도장)?\s*담당(?:은|는)?\s*([가-힣]+)\s*(?:가|이)?\s*대체/,
+      /퇴근(?:도장)?\s*(?:담당)?\s*[:：→]\s*([가-힣]+)/,
+      /퇴근(?:도장)?\s*(?:담당\s*)?대체(?:자)?\s*[:：]?\s*([가-힣]+)/,
+      /퇴근(?:도장)?(?:은|는)?\s*([가-힣]+)\s*(?:가|이)?\s*대체/,
+      /([가-힣]+)(?:이|가)?\s*(?:이\s*기간|기간\s*동안).*?퇴근(?:도장)?\s*(?:담당(?:자)?)?\s*(?:로\s*)?대체/,
+      /([가-힣]+)\s*(?:가|이)\s*퇴근(?:도장)?\s*대체/
+    ];
+    for(const re of outPatterns){
+      const mt=seg.match(re);
+      if(mt){const n=normalizeTeamName(mt[1]);if(n){result.out=n;break;}}
+    }
+  });
+  return result;
+}
+
+function getDateScheduleDuty(type,date){
+  for(const note of getNotesForDate(date)){
+    const fullText=(note.reason?note.reason+" ":"")+note.change;
+    const s=extractDateDutySchedule(fullText,date);
+    if(type==="in"&&s.in)return s.in;
+    if(type==="out"&&s.out)return s.out;
+  }
+  return null;
+}
+
+function isSwapScheduleNote(note){
+  const t=(note.reason?note.reason+" ":"")+note.change;
+  return /서로|날짜를\s*바꿈|교대/.test(t)&&/(\d{1,2})\s*일/.test(t);
+}
+
+function getSubstituteForBase(type,baseName,date){
+  for(const note of getNotesForDate(date)){
+    if(isSwapScheduleNote(note))continue;
+    const targets=parsePersons(note.person);
+    if(!targets.length&&!note.person.includes(baseName))continue;
+    if(targets.length&&!targets.includes(baseName))continue;
+    if(!targets.length&&note.person!==baseName)continue;
+    const fromChange=extractSubstituteFromChange(note.change,date);
+    const ch=parseChange(note.change,note.reason);
+    if(type==="in"){
+      if(fromChange.in)return fromChange.in;
+      if(ch.inSubstitute)return ch.inSubstitute;
+    }else{
+      if(fromChange.out)return fromChange.out;
+      if(ch.outSubstitute)return ch.outSubstitute;
+    }
+  }
+  return null;
+}
+
+function formatDutyLabel(name,state){
+  if(state[name]?.absent){
+    const r=state[name].reason;
+    return r?`${name} (${r}, 도장담당)`:name;
+  }
+  return name;
+}
+
+function findSubstituteForBase(type,baseName,date,state){
+  const sub=getSubstituteForBase(type,baseName,date);
+  if(sub)return sub;
+  for(const name of TEAM){
+    if(name===baseName)continue;
+    if(type==="in"&&state[name]?.noInStamp)continue;
+    if(type==="out"&&state[name]?.noOutStamp)continue;
+    return name;
+  }
+  return null;
+}
+
+function resolveStampDuty(type,baseName,date,state){
+  if(!baseName||baseName==="-")return "-";
+  const scheduleDuty=getDateScheduleDuty(type,date);
+  if(scheduleDuty){
+    const label=formatDutyLabel(scheduleDuty,state);
+    return scheduleDuty!==baseName?`${baseName} → ${label}`:label;
+  }
+  const sub=getSubstituteForBase(type,baseName,date);
+  const cannot=!sub&&(type==="in"?state[baseName]?.noInStamp:state[baseName]?.noOutStamp);
+  if(cannot){
+    const alt=findSubstituteForBase(type,baseName,date,state);
+    return alt?`${baseName} → ${formatDutyLabel(alt,state)}`:`${baseName} (담당 불가)`;
+  }
+  if(sub){
+    const label=formatDutyLabel(sub,state);
+    return sub!==baseName?`${baseName} → ${label}`:label;
+  }
+  if(state[baseName]?.absent){
+    const r=state[baseName].reason;
+    return r?`${baseName} (${r}, 도장담당)`:baseName;
+  }
+  return baseName;
+}
+
+function buildAttendance(date){
+  if(!isWork(date))return null;
+  const key=DAY_NAMES[date.getDay()];
+  const base=work[key]||{in:"-",out:"-"};
+  const state=buildPersonStates(date);
+  const inDuty=resolveStampDuty("in",base.in,date,state);
+  const outDuty=resolveStampDuty("out",base.out,date,state);
+  const attendees=TEAM.filter(n=>!state[n]?.absent);
+  const absentees=TEAM.filter(n=>state[n]?.absent).map(n=>{
+    const r=state[n].reason;
+    return r?`${n} (${r})`:n;
+  });
+  return {inDuty,outDuty,attendees,absentees};
+}
+
+function attendanceHtml(date){
+  if(!isWork(date))return "오늘은 근무일이 아닙니다.";
+  const info=buildAttendance(date);
+  const attendeeText=info.attendees.length?info.attendees.join(", "):"없음";
+  const absentText=info.absentees.length?info.absentees.join(", "):"없음";
+  return `
+    출근도장 담당 : ${info.inDuty}<br>
+    퇴근도장 담당 : ${info.outDuty}<br><br>
+    출근자 : ${attendeeText}<br>
+    미출근자 : ${absentText}
+  `;
+}
+
+function updateToday(date){
+  document.getElementById("todayBox").innerHTML=`${dateTitle(date)}<br><br>${attendanceHtml(date)}`;
+}
+
+function selectDate(y,m,d){
+  const clicked=new Date(y,m,d);
+  if(isSameDay(clicked,new Date()))return;
+  reloadNotes();
+  selectedDate=clicked;
+  document.getElementById("selectedTitle").innerText=dateTitle(selectedDate);
+  document.getElementById("selectedBox").innerHTML=attendanceHtml(selectedDate);
+  document.getElementById("selectedPanel").style.display="block";
+}
+
+function refreshAttendance(){
+  reloadNotes();
+  updateToday(new Date());
+  if(selectedDate&&!isSameDay(selectedDate,new Date())){
+    document.getElementById("selectedTitle").innerText=dateTitle(selectedDate);
+    document.getElementById("selectedBox").innerHTML=attendanceHtml(selectedDate);
+    document.getElementById("selectedPanel").style.display="block";
+  }else{
+    hideSelectedPanel();
+  }
+}
+
+function initGeminiSettings(){
+  const modelSel=document.getElementById("geminiModel");
+  modelSel.innerHTML=GEMINI_MODELS.map(m=>{
+    const paid=m.paid?" (유료)":"";
+    return `<option value="${m.id}">${m.label}${paid}</option>`;
+  }).join("");
+  const savedModel=localStorage.getItem("geminiModel")||"gemini-2.5-flash";
+  modelSel.value=GEMINI_MODELS.some(m=>m.id===savedModel)?savedModel:"gemini-2.5-flash";
+  const raw=localStorage.getItem("geminiKeyEncoded");
+  if(raw)document.getElementById("geminiKey").value=atob(raw);
+}
+
+function saveGeminiKey(){
+  const key=document.getElementById("geminiKey").value;
+  const model=document.getElementById("geminiModel").value;
+  localStorage.setItem("geminiKeyEncoded",btoa(key));
+  localStorage.setItem("geminiModel",model);
+  document.getElementById("saveStatus").innerText="저장 완료";
+}
+
+async function testGeminiKey(){
+  const raw=localStorage.getItem("geminiKeyEncoded");
+  if(!raw){document.getElementById("testStatus").innerText="키 없음";return;}
+  const key=atob(raw);
+  const model=document.getElementById("geminiModel").value||localStorage.getItem("geminiModel")||"gemini-2.5-flash";
+  try{
+    const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({contents:[{parts:[{text:"test"}]}]})
+    });
+    document.getElementById("testStatus").innerText=res.ok?"테스트 OK":"테스트 실패";
+  }catch(e){
+    document.getElementById("testStatus").innerText="테스트 실패";
+  }
+}
+
+renderWork();
+renderRule();
+renderNotes();
+initGeminiSettings();
+draw();
+</script>
+
+</body>
+</html>
