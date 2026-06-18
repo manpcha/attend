@@ -1,0 +1,9 @@
+services:
+  attend:
+    build: .
+    container_name: attend
+    ports:
+      - "8102:8102"
+    volumes:
+      - ./data:/data
+    restart: unless-stopped

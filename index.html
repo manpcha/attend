@@ -29,6 +29,10 @@ button{padding:7px 12px;margin:5px 3px;cursor:pointer}
 .auto-hint{margin-left:8px;color:#666;font-size:0.9em}
 .calendar-title{text-align:center;font-size:2.4em;font-weight:bold;margin:0 0 16px}
 .calendar-controls{margin-bottom:10px}
+.section-header{display:flex;justify-content:space-between;align-items:center;margin:8px 0}
+.section-toast{color:green;font-weight:bold;opacity:0;transition:opacity 0.35s;min-height:1.2em}
+.section-toast.show{opacity:1}
+#noteBox.edit-mode{background:#f3f4f6}
 </style>
 </head>
 <body>
@@ -72,17 +76,33 @@ button{padding:7px 12px;margin:5px 3px;cursor:pointer}
 <div id="workPanel" class="panel">
   <h2>근무기본사항</h2>
 
-  <b>요일별 출근/퇴근담당</b>
+  <div class="section-header">
+    <b>요일별 출근/퇴근담당</b>
+    <span id="workSaveStatus" class="section-toast"></span>
+  </div>
   <div id="workBox"></div>
-  <button onclick="editWork()">수정</button>
-  <button onclick="saveWork()">저장</button>
+  <span id="workViewBtns">
+    <button onclick="editWork()">수정</button>
+  </span>
+  <span id="workEditBtns" style="display:none">
+    <button onclick="cancelWork()">취소</button>
+    <button onclick="saveWork()">저장</button>
+  </span>
 
   <hr>
 
-  <b>주별 근무 요일</b>
+  <div class="section-header">
+    <b>주별 근무 요일</b>
+    <span id="ruleSaveStatus" class="section-toast"></span>
+  </div>
   <div id="ruleBox"></div>
-  <button onclick="editRule()">수정</button>
-  <button onclick="saveRule()">저장</button>
+  <span id="ruleViewBtns">
+    <button onclick="editRule()">수정</button>
+  </span>
+  <span id="ruleEditBtns" style="display:none">
+    <button onclick="cancelRule()">취소</button>
+    <button onclick="saveRule()">저장</button>
+  </span>
 </div>
 
 <div id="notePanel" class="panel">
@@ -107,14 +127,22 @@ button{padding:7px 12px;margin:5px 3px;cursor:pointer}
 </div>
 
 <div id="listPanel" class="panel">
-  <h2>특기사항 조회</h2>
+  <div class="section-header">
+    <h2 style="margin:0">특기사항 조회</h2>
+    <span id="notesSaveStatus" class="section-toast"></span>
+  </div>
 
   <b>등록번호/해당 기간/대상자/특기 사항/변경 사항</b>
   <textarea id="noteBox" rows="12" readonly></textarea>
 
   <br>
-  <button onclick="editNotes()">수정</button>
-  <span id="editBtns" style="display:none;">
+  <span id="listViewBtns">
+    <button onclick="editNotes()">수정</button>
+    <button onclick="exportNotes()">내보내기</button>
+    <button onclick="openNotesImport()">불러오기</button>
+  </span>
+  <input id="noteImportFile" type="file" accept=".txt,text/plain" style="display:none">
+  <span id="editBtns" style="display:none">
     <button onclick="cancelNotes()">취소</button>
     <button onclick="saveNotes()">저장</button>
   </span>
@@ -140,24 +168,33 @@ button{padding:7px 12px;margin:5px 3px;cursor:pointer}
 function show(id){
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.getElementById(id+'Panel').classList.add('active');
-  reloadNotes();
-  renderNotes();
-  if(id==="main")draw();
+  reloadNotes().then(()=>{
+    renderNotes();
+    if(id==="main")draw();
+  });
 }
 
-let work = JSON.parse(localStorage.getItem("work")) || {
+const DEFAULT_WORK={
   화:{in:"송정용",out:"김영구"},
   수:{in:"차준호",out:"양준모"},
   목:{in:"선형종",out:"박진배"}
 };
-
-let rule = JSON.parse(localStorage.getItem("rule")) || {
+const DEFAULT_RULE={
   odd:"화/수/목 (1,3,5주)",
   even:"수/목 (2,4주)"
 };
+const DEFAULT_SETTINGS={
+  geminiKeyEncoded:"",
+  geminiModel:"gemini-2.5-flash"
+};
 
-let notes = JSON.parse(localStorage.getItem("notes")||"[]");
-let selectedDate = null;
+let work=JSON.parse(JSON.stringify(DEFAULT_WORK));
+let rule=JSON.parse(JSON.stringify(DEFAULT_RULE));
+let settings=JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+let notes=[];
+let selectedDate=null;
+let workBackup=null;
+let ruleBackup=null;
 
 const TEAM=["송정용","김영구","차준호","양준모","선형종","박진배"];
 const DAY_NAMES=["일","월","화","수","목","금","토"];
@@ -169,10 +206,7 @@ const TUESDAY_POLICY_NTH=[2,4];
 const GEMINI_MODELS=[
   {id:"gemini-2.5-flash",label:"Gemini 2.5 Flash",paid:false},
   {id:"gemini-2.5-flash-lite",label:"Gemini 2.5 Flash-Lite",paid:false},
-  {id:"gemini-2.5-pro",label:"Gemini 2.5 Pro",paid:false},
-  {id:"gemini-3.5-flash",label:"Gemini 3.5 Flash",paid:false},
-  {id:"gemini-3.1-flash-lite",label:"Gemini 3.1 Flash-Lite",paid:false},
-  {id:"gemini-3.1-pro-preview",label:"Gemini 3.1 Pro",paid:true}
+  {id:"gemini-2.5-pro",label:"Gemini 2.5 Pro",paid:true}
 ];
 
 const y=document.getElementById("year");
@@ -194,6 +228,25 @@ function makeId(){
     +String(n.getSeconds()).padStart(2,"0");
 }
 
+function showSectionToast(id,msg,duration=2000){
+  const el=document.getElementById(id);
+  if(!el)return;
+  el.innerText=msg;
+  el.classList.add("show");
+  clearTimeout(el._timer);
+  el._timer=setTimeout(()=>el.classList.remove("show"),duration);
+}
+
+function setWorkEditMode(editing){
+  document.getElementById("workViewBtns").style.display=editing?"none":"inline";
+  document.getElementById("workEditBtns").style.display=editing?"inline":"none";
+}
+
+function setRuleEditMode(editing){
+  document.getElementById("ruleViewBtns").style.display=editing?"none":"inline";
+  document.getElementById("ruleEditBtns").style.display=editing?"inline":"none";
+}
+
 function renderWork(){
   document.getElementById("workBox").innerHTML=`
     <table>
@@ -205,6 +258,7 @@ function renderWork(){
 }
 
 function editWork(){
+  workBackup=JSON.parse(JSON.stringify(work));
   document.getElementById("workBox").innerHTML=`
     <table>
       <tr><th>요일</th><th>출근담당</th><th>퇴근담당</th></tr>
@@ -215,15 +269,29 @@ function editWork(){
         <td><input data-d="${d}" data-t="out" value="${work[d].out}"></td>
       </tr>`).join("")}
     </table>`;
+  setWorkEditMode(true);
+}
+
+function cancelWork(){
+  if(workBackup)work=workBackup;
+  renderWork();
+  setWorkEditMode(false);
 }
 
 function saveWork(){
   document.querySelectorAll("#workBox input").forEach(i=>{
     work[i.dataset.d][i.dataset.t]=i.value;
   });
-  localStorage.setItem("work",JSON.stringify(work));
-  renderWork();
-  draw();
+  fetch("/api/work",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify(work)
+  }).then(()=>{
+    renderWork();
+    setWorkEditMode(false);
+    showSectionToast("workSaveStatus","저장 완료");
+    draw();
+  }).catch(()=>alert("저장 실패"));
 }
 
 function renderRule(){
@@ -236,20 +304,35 @@ function renderRule(){
 }
 
 function editRule(){
+  ruleBackup=JSON.parse(JSON.stringify(rule));
   document.getElementById("ruleBox").innerHTML=`
     <table>
       <tr><th>주</th><th>근무 요일</th></tr>
       <tr><td>홀수주</td><td><input id="odd" value="${rule.odd}"></td></tr>
       <tr><td>짝수주</td><td><input id="even" value="${rule.even}"></td></tr>
     </table>`;
+  setRuleEditMode(true);
+}
+
+function cancelRule(){
+  if(ruleBackup)rule=ruleBackup;
+  renderRule();
+  setRuleEditMode(false);
 }
 
 function saveRule(){
   rule.odd=document.getElementById("odd").value;
   rule.even=document.getElementById("even").value;
-  localStorage.setItem("rule",JSON.stringify(rule));
-  renderRule();
-  draw();
+  fetch("/api/rule",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify(rule)
+  }).then(()=>{
+    renderRule();
+    setRuleEditMode(false);
+    showSectionToast("ruleSaveStatus","저장 완료");
+    draw();
+  }).catch(()=>alert("저장 실패"));
 }
 
 function sanitizeNoteLine(line){
@@ -268,40 +351,94 @@ function mergeNoteLines(lines){
   return merged;
 }
 
-function reloadNotes(){
-  const raw=JSON.parse(localStorage.getItem("notes")||"[]");
-  notes=mergeNoteLines(raw);
-  if(notes.length!==raw.length)localStorage.setItem("notes",JSON.stringify(notes));
+async function persistNotes(){
+  const content=notes.join("\n");
+  const res=await fetch("/api/notes",{
+    method:"POST",
+    headers:{"Content-Type":"text/plain; charset=utf-8"},
+    body:content
+  });
+  if(!res.ok)throw new Error("notes save failed");
+}
+
+async function reloadNotes(){
+  try{
+    const res=await fetch("/api/notes");
+    if(!res.ok)throw new Error("notes load failed");
+    const text=(await res.text()).replace(/^\ufeff/,"");
+    notes=mergeNoteLines(text.split(/\r?\n/));
+  }catch(e){
+    notes=[];
+  }
+}
+
+async function loadWork(){
+  try{
+    const res=await fetch("/api/work");
+    if(res.ok)work=await res.json();
+  }catch(e){
+    work=JSON.parse(JSON.stringify(DEFAULT_WORK));
+  }
+}
+
+async function loadRule(){
+  try{
+    const res=await fetch("/api/rule");
+    if(res.ok)rule=await res.json();
+  }catch(e){
+    rule=JSON.parse(JSON.stringify(DEFAULT_RULE));
+  }
+}
+
+async function loadSettings(){
+  try{
+    const res=await fetch("/api/settings");
+    if(res.ok)settings=await res.json();
+  }catch(e){
+    settings=JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+  }
+}
+
+async function loadAllData(){
+  await Promise.all([loadWork(),loadRule(),loadSettings(),reloadNotes()]);
 }
 
 function saveNote(){
   const text=sanitizeNoteLine(document.getElementById("noteInput").value);
   if(!text){alert("내용을 입력하세요.");return;}
-  reloadNotes();
-  notes.push(`${makeId()}/${text}`);
-  localStorage.setItem("notes",JSON.stringify(notes));
-  document.getElementById("noteInput").value="";
-  renderNotes();
-  draw();
-  alert("저장 완료");
+  reloadNotes().then(()=>{
+    notes.push(`${makeId()}/${text}`);
+    return persistNotes();
+  }).then(()=>{
+    document.getElementById("noteInput").value="";
+    renderNotes();
+    draw();
+    alert("저장 완료");
+  }).catch(()=>alert("저장 실패"));
 }
 
 function renderNotes(){
-  reloadNotes();
   document.getElementById("noteBox").value=notes.join("\n");
 }
 
+function setNotesViewMode(editing){
+  document.getElementById("listViewBtns").style.display=editing?"none":"inline";
+  document.getElementById("editBtns").style.display=editing?"inline":"none";
+  const box=document.getElementById("noteBox");
+  box.readOnly=!editing;
+  box.classList.toggle("edit-mode",editing);
+}
+
 function editNotes(){
-  reloadNotes();
-  renderNotes();
-  document.getElementById("noteBox").readOnly=false;
-  document.getElementById("editBtns").style.display="inline";
+  reloadNotes().then(()=>{
+    renderNotes();
+    setNotesViewMode(true);
+  });
 }
 
 function cancelNotes(){
-  document.getElementById("noteBox").readOnly=true;
-  document.getElementById("editBtns").style.display="none";
-  renderNotes();
+  setNotesViewMode(false);
+  reloadNotes().then(renderNotes);
 }
 
 function saveNotes(){
@@ -310,13 +447,69 @@ function saveNotes(){
     if(/^\d{14}\//.test(line))return line;
     return `${makeId()}/${line}`;
   });
-  localStorage.setItem("notes",JSON.stringify(notes));
-  document.getElementById("noteBox").readOnly=true;
-  document.getElementById("editBtns").style.display="none";
-  renderNotes();
-  draw();
-  alert("저장 완료");
+  persistNotes().then(()=>{
+    setNotesViewMode(false);
+    renderNotes();
+    draw();
+    showSectionToast("notesSaveStatus","저장 완료");
+  }).catch(()=>alert("저장 실패"));
 }
+
+function exportNotes(){
+  reloadNotes().then(()=>{
+    const content=notes.join("\n");
+    const blob=new Blob(["\ufeff"+content],{type:"text/plain;charset=utf-8"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url;
+    a.download="특기 사항.txt";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  });
+}
+
+function openNotesImport(){
+  const input=document.getElementById("noteImportFile");
+  if(!input){alert("불러오기 입력창을 찾지 못했습니다.");return;}
+  input.value="";
+  input.click();
+}
+
+function importNotesFile(event){
+  const input=event.target;
+  const file=input.files&&input.files[0];
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=(loadEvent)=>{
+    const text=String((loadEvent.target&&loadEvent.target.result)||reader.result||"").replace(/^\ufeff/,"");
+    const imported=mergeNoteLines(text.split(/\r?\n/)).map(line=>{
+      if(/^\d{14}\//.test(line))return line;
+      return `${makeId()}/${line}`;
+    });
+    if(!imported.length){
+      alert("불러올 특기 사항이 없습니다.");
+      input.value="";
+      return;
+    }
+    notes=imported;
+    persistNotes().then(()=>{
+      const noteBox=document.getElementById("noteBox");
+      noteBox.value=notes.join("\n");
+      setNotesViewMode(false);
+      refreshAttendance();
+      alert("불러오기 완료");
+      input.value="";
+    }).catch(()=>alert("저장 실패"));
+  };
+  reader.onerror=()=>{
+    alert("파일을 불러오지 못했습니다.");
+    input.value="";
+  };
+  reader.readAsText(file,"UTF-8");
+}
+
 
 let pendingPhotoFile=null;
 
@@ -353,11 +546,10 @@ document.getElementById("photoDesc").addEventListener("input",()=>{
 });
 
 function getGeminiConfig(){
-  const raw=localStorage.getItem("geminiKeyEncoded");
-  if(!raw)return null;
+  if(!settings.geminiKeyEncoded)return null;
   return{
-    key:atob(raw),
-    model:localStorage.getItem("geminiModel")||"gemini-2.5-flash"
+    key:atob(settings.geminiKeyEncoded),
+    model:settings.geminiModel||"gemini-2.5-flash"
   };
 }
 
@@ -504,10 +696,10 @@ async function savePhotoNote(){
     }
     const combined=[desc&&`[직접입력] ${desc}`,photoText&&`[사진분석] ${photoText}`].filter(Boolean).join("\n");
     const structured=await structureNoteText(combined);
-    reloadNotes();
+    await reloadNotes();
     const id=makeId();
     notes.push(`${id}/${structured}`);
-    localStorage.setItem("notes",JSON.stringify(notes));
+    await persistNotes();
     document.getElementById("photoDesc").value="";
     setPendingPhoto(null);
     photoFileInput.value="";
@@ -611,9 +803,10 @@ function hideSelectedPanel(){
 }
 
 function refreshAttendancePanels(){
-  reloadNotes();
-  updateToday(new Date());
-  hideSelectedPanel();
+  reloadNotes().then(()=>{
+    updateToday(new Date());
+    hideSelectedPanel();
+  });
 }
 
 function dateTitle(date){
@@ -961,52 +1154,61 @@ function updateToday(date){
 function selectDate(y,m,d){
   const clicked=new Date(y,m,d);
   if(isSameDay(clicked,new Date()))return;
-  reloadNotes();
-  selectedDate=clicked;
-  document.getElementById("selectedTitle").innerText=dateTitle(selectedDate);
-  document.getElementById("selectedBox").innerHTML=attendanceHtml(selectedDate);
-  document.getElementById("selectedPanel").style.display="block";
-}
-
-function refreshAttendance(){
-  reloadNotes();
-  updateToday(new Date());
-  if(selectedDate&&!isSameDay(selectedDate,new Date())){
+  reloadNotes().then(()=>{
+    selectedDate=clicked;
     document.getElementById("selectedTitle").innerText=dateTitle(selectedDate);
     document.getElementById("selectedBox").innerHTML=attendanceHtml(selectedDate);
     document.getElementById("selectedPanel").style.display="block";
-  }else{
-    hideSelectedPanel();
-  }
+  });
 }
 
-function initGeminiSettings(){
+function refreshAttendance(){
+  reloadNotes().then(()=>{
+    updateToday(new Date());
+    if(selectedDate&&!isSameDay(selectedDate,new Date())){
+      document.getElementById("selectedTitle").innerText=dateTitle(selectedDate);
+      document.getElementById("selectedBox").innerHTML=attendanceHtml(selectedDate);
+      document.getElementById("selectedPanel").style.display="block";
+    }else{
+      hideSelectedPanel();
+    }
+  });
+}
+
+function initGeminiModelSelect(){
   const modelSel=document.getElementById("geminiModel");
   modelSel.innerHTML=GEMINI_MODELS.map(m=>{
     const paid=m.paid?" (유료)":"";
     return `<option value="${m.id}">${m.label}${paid}</option>`;
   }).join("");
-  const savedModel=localStorage.getItem("geminiModel")||"gemini-2.5-flash";
-  modelSel.value=GEMINI_MODELS.some(m=>m.id===savedModel)?savedModel:"gemini-2.5-flash";
-  const raw=localStorage.getItem("geminiKeyEncoded");
-  if(raw)document.getElementById("geminiKey").value=atob(raw);
+}
+
+function applySettingsToUI(){
+  const savedModel=settings.geminiModel||"gemini-2.5-flash";
+  document.getElementById("geminiModel").value=GEMINI_MODELS.some(m=>m.id===savedModel)?savedModel:"gemini-2.5-flash";
+  if(settings.geminiKeyEncoded)document.getElementById("geminiKey").value=atob(settings.geminiKeyEncoded);
 }
 
 function saveGeminiKey(){
   const key=document.getElementById("geminiKey").value;
   const model=document.getElementById("geminiModel").value;
-  localStorage.setItem("geminiKeyEncoded",btoa(key));
-  localStorage.setItem("geminiModel",model);
-  document.getElementById("saveStatus").innerText="저장 완료";
+  settings.geminiKeyEncoded=key?btoa(key):"";
+  settings.geminiModel=model;
+  fetch("/api/settings",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify(settings)
+  }).then(()=>{
+    document.getElementById("saveStatus").innerText="저장 완료";
+  }).catch(()=>alert("저장 실패"));
 }
 
 async function testGeminiKey(){
-  const raw=localStorage.getItem("geminiKeyEncoded");
-  if(!raw){document.getElementById("testStatus").innerText="키 없음";return;}
-  const key=atob(raw);
-  const model=document.getElementById("geminiModel").value||localStorage.getItem("geminiModel")||"gemini-2.5-flash";
+  const keyInput=document.getElementById("geminiKey").value;
+  if(!keyInput){document.getElementById("testStatus").innerText="키 없음";return;}
+  const model=document.getElementById("geminiModel").value||settings.geminiModel||"gemini-2.5-flash";
   try{
-    const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,{
+    const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${keyInput}`,{
       method:"POST",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({contents:[{parts:[{text:"test"}]}]})
@@ -1017,11 +1219,17 @@ async function testGeminiKey(){
   }
 }
 
-renderWork();
-renderRule();
-renderNotes();
-initGeminiSettings();
-draw();
+const noteImportInput=document.getElementById("noteImportFile");
+if(noteImportInput)noteImportInput.addEventListener("change",importNotesFile);
+
+initGeminiModelSelect();
+loadAllData().then(()=>{
+  applySettingsToUI();
+  renderWork();
+  renderRule();
+  renderNotes();
+  draw();
+});
 </script>
 
 </body>
