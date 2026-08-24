@@ -21,6 +21,18 @@ DEFAULT_SETTINGS = {
     "geminiKeyEncoded": "",
     "geminiModel": "gemini-2.5-flash",
 }
+DEFAULT_TUESDAY_SCHEDULE = {
+    "2026-09": [8, 22],
+    "2026-10": [],
+    "2026-11": [],
+    "2026-12": [],
+    "2027-01": [],
+    "2027-02": [],
+    "2027-03": [],
+    "2027-04": [],
+    "2027-05": [],
+    "2027-06": [],
+}
 
 app = FastAPI(title="근태 시스템")
 
@@ -105,4 +117,16 @@ async def get_settings():
 async def post_settings(data: dict):
     ensure_data_dir()
     write_json(DATA_DIR / "settings.json", data)
+    return {"ok": True}
+
+
+@app.get("/api/tuesday-schedule")
+async def get_tuesday_schedule():
+    return read_json(DATA_DIR / "tuesday_schedule.json", DEFAULT_TUESDAY_SCHEDULE)
+
+
+@app.post("/api/tuesday-schedule")
+async def post_tuesday_schedule(data: dict):
+    ensure_data_dir()
+    write_json(DATA_DIR / "tuesday_schedule.json", data)
     return {"ok": True}
