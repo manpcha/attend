@@ -895,6 +895,16 @@ function applyTuesdayPolicyToWork(date){
   return null;
 }
 
+function isTuesdayScheduleUnset(date){
+  if(date.getDay()!==2)return false;
+  const d=dateOnly(date).getTime();
+  const monthlyCutoff=dateOnly(MONTHLY_TUESDAY_POLICY_CUTOFF).getTime();
+  if(d<monthlyCutoff)return false;
+  const key=tuesdayScheduleKey(date.getFullYear(),date.getMonth()+1);
+  const dates=tuesdaySchedule[key];
+  return !dates||dates.length===0;
+}
+
 function isWork(date){
   const tuePolicy=applyTuesdayPolicyToWork(date);
   if(tuePolicy===true)return true;
@@ -1294,6 +1304,7 @@ function buildAttendance(date){
 }
 
 function attendanceHtml(date){
+  if(isTuesdayScheduleUnset(date))return "화요일 출근 미정";
   if(!isWork(date))return "오늘은 근무일이 아닙니다.";
   const info=buildAttendance(date);
   const attendeeText=info.attendees.length?info.attendees.join(", "):"없음";
