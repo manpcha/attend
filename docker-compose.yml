@@ -4,6 +4,10 @@ services:
     container_name: attend
     ports:
       - "8102:8102"
+    environment:
+      DATA_DIR: /data
     volumes:
       - ./data:/data
+      - ./app.py:/app/app.py:ro
+      - ./index.html:/app/index.html:ro
     restart: unless-stopped

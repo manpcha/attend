@@ -6,7 +6,8 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 
 BASE_DIR = Path(__file__).parent
-DATA_DIR = Path(os.environ.get("DATA_DIR", "/data"))
+_DEFAULT_DATA = BASE_DIR / "data"
+DATA_DIR = Path(os.environ.get("DATA_DIR", str(_DEFAULT_DATA)))
 
 DEFAULT_WORK = {
     "화": {"in": "송정용", "out": "김영구"},
@@ -130,3 +131,12 @@ async def post_tuesday_schedule(data: dict):
     ensure_data_dir()
     write_json(DATA_DIR / "tuesday_schedule.json", data)
     return {"ok": True}
+
+
+@app.get("/api/status")
+async def get_status():
+    data_files = ["notes.txt", "settings.json", "work.json", "rule.json", "tuesday_schedule.json"]
+    return {
+        "dataDir": str(DATA_DIR.resolve()),
+        "files": {name: (DATA_DIR / name).exists() for name in data_files},
+    }
