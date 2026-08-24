@@ -103,6 +103,22 @@ button{padding:7px 12px;margin:5px 3px;cursor:pointer}
     <button onclick="cancelRule()">취소</button>
     <button onclick="saveRule()">저장</button>
   </span>
+
+  <hr>
+
+  <div class="section-header">
+    <b>화요일 출근 날짜 지정</b>
+    <span id="tuesdaySaveStatus" class="section-toast"></span>
+  </div>
+  <div class="auto-hint" style="margin-bottom:8px">2026년 9월 1일부터 적용 · 수요일·목요일은 항상 근무일, 화요일은 월별로 지정</div>
+  <div id="tuesdayBox"></div>
+  <span id="tuesdayViewBtns">
+    <button onclick="editTuesday()">수정</button>
+  </span>
+  <span id="tuesdayEditBtns" style="display:none">
+    <button onclick="cancelTuesday()">취소</button>
+    <button onclick="saveTuesday()">저장</button>
+  </span>
 </div>
 
 <div id="notePanel" class="panel">
@@ -183,6 +199,27 @@ const DEFAULT_RULE={
   odd:"화/수/목 (1,3,5주)",
   even:"수/목 (2,4주)"
 };
+const TUESDAY_SCHEDULE_MONTHS=[
+  {year:2026,month:9},
+  {year:2026,month:10},
+  {year:2026,month:11},
+  {year:2026,month:12},
+  {year:2027,month:1},
+  {year:2027,month:2},
+  {year:2027,month:3},
+  {year:2027,month:4},
+  {year:2027,month:5},
+  {year:2027,month:6}
+];
+function buildDefaultTuesdaySchedule(){
+  const schedule={};
+  TUESDAY_SCHEDULE_MONTHS.forEach(({year,month})=>{
+    const key=`${year}-${String(month).padStart(2,"0")}`;
+    schedule[key]=year===2026&&month===9?[8,22]:[];
+  });
+  return schedule;
+}
+const DEFAULT_TUESDAY_SCHEDULE=buildDefaultTuesdaySchedule();
 const DEFAULT_SETTINGS={
   geminiKeyEncoded:"",
   geminiModel:"gemini-2.5-flash"
@@ -190,18 +227,22 @@ const DEFAULT_SETTINGS={
 
 let work=JSON.parse(JSON.stringify(DEFAULT_WORK));
 let rule=JSON.parse(JSON.stringify(DEFAULT_RULE));
+let tuesdaySchedule=JSON.parse(JSON.stringify(DEFAULT_TUESDAY_SCHEDULE));
 let settings=JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
 let notes=[];
 let selectedDate=null;
 let workBackup=null;
 let ruleBackup=null;
+let tuesdayBackup=null;
 
 const TEAM=["송정용","김영구","차준호","양준모","선형종","박진배"];
 const DAY_NAMES=["일","월","화","수","목","금","토"];
 
-// 화요일 근무 정책: 2026.07.01 이전 모든 화요일은 근무일(출근), 이후 둘째·넷째 화요일만 근무일
+// 화요일 근무 정책: 2026.07.01 이전 모든 화요일은 근무일(출근), 7~8월은 둘째·넷째 화요일만 근무일
 const TUESDAY_POLICY_CUTOFF=new Date(2026,6,1);
 const TUESDAY_POLICY_NTH=[2,4];
+// 2026.09.01 이후: 수·목 항상 근무, 화요일은 월별 지정(tuesdaySchedule)
+const MONTHLY_TUESDAY_POLICY_CUTOFF=new Date(2026,8,1);
 
 const GEMINI_MODELS=[
   {id:"gemini-2.5-flash",label:"Gemini 2.5 Flash",paid:false},
@@ -245,6 +286,37 @@ function setWorkEditMode(editing){
 function setRuleEditMode(editing){
   document.getElementById("ruleViewBtns").style.display=editing?"none":"inline";
   document.getElementById("ruleEditBtns").style.display=editing?"inline":"none";
+}
+
+function setTuesdayEditMode(editing){
+  document.getElementById("tuesdayViewBtns").style.display=editing?"none":"inline";
+  document.getElementById("tuesdayEditBtns").style.display=editing?"inline":"none";
+}
+
+function tuesdayScheduleKey(year,month){
+  return `${year}-${String(month).padStart(2,"0")}`;
+}
+
+function formatTuesdayDates(dates){
+  return (dates||[]).slice().sort((a,b)=>a-b).join(", ");
+}
+
+function getTuesdaysInMonth(year,month){
+  const days=[];
+  const last=new Date(year,month,0).getDate();
+  for(let d=1;d<=last;d++){
+    if(new Date(year,month-1,d).getDay()===2)days.push(d);
+  }
+  return days;
+}
+
+function parseTuesdayDateInput(str,year,month){
+  if(!str||!String(str).trim())return {dates:[],invalid:[]};
+  const valid=getTuesdaysInMonth(year,month);
+  const parsed=String(str).split(/[,，\s]+/).map(s=>parseInt(s.trim(),10)).filter(n=>!isNaN(n));
+  const unique=[...new Set(parsed)].filter(d=>valid.includes(d)).sort((a,b)=>a-b);
+  const invalid=parsed.filter(d=>!valid.includes(d));
+  return {dates:unique,invalid};
 }
 
 function renderWork(){
@@ -335,6 +407,67 @@ function saveRule(){
   }).catch(()=>alert("저장 실패"));
 }
 
+function renderTuesday(){
+  document.getElementById("tuesdayBox").innerHTML=`
+    <table>
+      <tr><th>년 월</th><th>날짜</th></tr>
+      ${TUESDAY_SCHEDULE_MONTHS.map(({year,month})=>{
+        const key=tuesdayScheduleKey(year,month);
+        const dates=formatTuesdayDates(tuesdaySchedule[key]);
+        return `<tr><td>${year}년 ${String(month).padStart(2,"0")}월</td><td>${dates}</td></tr>`;
+      }).join("")}
+    </table>`;
+}
+
+function editTuesday(){
+  tuesdayBackup=JSON.parse(JSON.stringify(tuesdaySchedule));
+  document.getElementById("tuesdayBox").innerHTML=`
+    <table>
+      <tr><th>년 월</th><th>날짜</th></tr>
+      ${TUESDAY_SCHEDULE_MONTHS.map(({year,month})=>{
+        const key=tuesdayScheduleKey(year,month);
+        const dates=formatTuesdayDates(tuesdaySchedule[key]);
+        return `<tr>
+          <td>${year}년 ${String(month).padStart(2,"0")}월</td>
+          <td><input data-key="${key}" value="${dates}" placeholder="예: 8, 22"></td>
+        </tr>`;
+      }).join("")}
+    </table>`;
+  setTuesdayEditMode(true);
+}
+
+function cancelTuesday(){
+  if(tuesdayBackup)tuesdaySchedule=tuesdayBackup;
+  renderTuesday();
+  setTuesdayEditMode(false);
+}
+
+function saveTuesday(){
+  const next=JSON.parse(JSON.stringify(DEFAULT_TUESDAY_SCHEDULE));
+  const invalidAll=[];
+  document.querySelectorAll("#tuesdayBox input").forEach(input=>{
+    const key=input.dataset.key;
+    const [year,month]=key.split("-").map(Number);
+    const {dates,invalid}=parseTuesdayDateInput(input.value,year,month);
+    next[key]=dates;
+    invalid.forEach(d=>invalidAll.push(`${year}년 ${String(month).padStart(2,"0")}월 ${d}일`));
+  });
+  if(invalidAll.length){
+    alert(`화요일이 아닌 날짜는 제외됩니다:\n${invalidAll.join("\n")}`);
+  }
+  tuesdaySchedule=next;
+  fetch("/api/tuesday-schedule",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify(tuesdaySchedule)
+  }).then(()=>{
+    renderTuesday();
+    setTuesdayEditMode(false);
+    showSectionToast("tuesdaySaveStatus","저장 완료");
+    draw();
+  }).catch(()=>alert("저장 실패"));
+}
+
 function sanitizeNoteLine(line){
   return String(line).replace(/\r/g,"").replace(/\n/g," ").replace(/\s+/g," ").trim();
 }
@@ -390,6 +523,19 @@ async function loadRule(){
   }
 }
 
+async function loadTuesdaySchedule(){
+  try{
+    const res=await fetch("/api/tuesday-schedule");
+    if(res.ok){
+      const data=await res.json();
+      tuesdaySchedule=JSON.parse(JSON.stringify(DEFAULT_TUESDAY_SCHEDULE));
+      Object.assign(tuesdaySchedule,data);
+    }
+  }catch(e){
+    tuesdaySchedule=JSON.parse(JSON.stringify(DEFAULT_TUESDAY_SCHEDULE));
+  }
+}
+
 async function loadSettings(){
   try{
     const res=await fetch("/api/settings");
@@ -400,7 +546,7 @@ async function loadSettings(){
 }
 
 async function loadAllData(){
-  await Promise.all([loadWork(),loadRule(),loadSettings(),reloadNotes()]);
+  await Promise.all([loadWork(),loadRule(),loadTuesdaySchedule(),loadSettings(),reloadNotes()]);
 }
 
 function saveNote(){
@@ -736,6 +882,12 @@ function whichNthWeekday(date){
 function applyTuesdayPolicyToWork(date){
   if(date.getDay()!==2)return null;
   const d=dateOnly(date).getTime();
+  const monthlyCutoff=dateOnly(MONTHLY_TUESDAY_POLICY_CUTOFF).getTime();
+  if(d>=monthlyCutoff){
+    const key=tuesdayScheduleKey(date.getFullYear(),date.getMonth()+1);
+    const dates=tuesdaySchedule[key]||[];
+    return dates.includes(date.getDate())?true:null;
+  }
   const cutoff=dateOnly(TUESDAY_POLICY_CUTOFF).getTime();
   const nth=whichNthWeekday(date);
   if(d<cutoff)return true;
@@ -746,6 +898,13 @@ function applyTuesdayPolicyToWork(date){
 function isWork(date){
   const tuePolicy=applyTuesdayPolicyToWork(date);
   if(tuePolicy===true)return true;
+  const d=dateOnly(date).getTime();
+  const monthlyCutoff=dateOnly(MONTHLY_TUESDAY_POLICY_CUTOFF).getTime();
+  if(d>=monthlyCutoff){
+    const day=date.getDay();
+    if(day===0||day===1||day===5||day===6)return false;
+    return day===3||day===4;
+  }
   const day=date.getDay();
   const w=week(date);
   const odd=w%2===1;
@@ -954,7 +1113,7 @@ function buildPersonStates(date){
 }
 
 function applyTuesdayPolicyToAttendance(date,state){
-  // 화요일 근무일(출근 표기)은 TUESDAY_POLICY_* 상수로 달력에만 적용. 개인별 미출근은 특기사항 유지.
+  // 화요일 근무일(출근 표기)은 tuesdaySchedule·TUESDAY_POLICY_* 로 달력에만 적용. 개인별 미출근은 특기사항 유지.
 }
 
 function clauseMatchesDate(date,clause){
@@ -1227,6 +1386,7 @@ loadAllData().then(()=>{
   applySettingsToUI();
   renderWork();
   renderRule();
+  renderTuesday();
   renderNotes();
   draw();
 });
