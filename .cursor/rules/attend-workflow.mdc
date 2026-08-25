@@ -20,8 +20,9 @@ alwaysApply: true
 - NAS 공유 폴더: `T:\` (= `\\dandycha\docker\attend`) — **파일 복사만** (PC에서 robocopy)
 - Docker는 **NAS 본체**에서 실행. T: 드라이브에서 `docker` 명령 불가
 - PC: `sync-to-nas.cmd` 로 파일 복사
-- NAS 재시작: DSM Container Manager 또는 `restart-nas-docker.bat` (SSH)
-- NAS DNS 제약: NAS에서 pip install / docker build 지양. 파일 복사 후 컨테이너 restart만
+- NAS 재시작: DSM Container Manager 또는 SSH
+- NAS DNS 문제로 `docker build` 실패 시: PC에서 `build-nas-image.bat` → NAS에서 `docker load`
+- NAS 실행: `docker compose -f docker-compose.nas.yml up -d` (build 없음)
 
 ## 주의
 - Cloud Agent는 `D:\`, `T:\` 에 직접 접근 불가. 로컬 PC에서 스크립트 실행 안내 필요.
