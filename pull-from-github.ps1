@@ -11,8 +11,9 @@ $base = "https://raw.githubusercontent.com/manpcha/attend/master"
 $files = @(
     "index.html", "app.py", "Dockerfile", "docker-compose.yml", "requirements.txt",
     "run-local.bat", "run-local.ps1",
-    "sync-to-nas.bat", "sync-to-nas.ps1",
-    "pull-from-github.bat", "pull-from-github.ps1", "update-nas.bat"
+    "sync-to-nas.bat", "sync-to-nas.ps1", "sync-to-nas.cmd",
+    "pull-from-github.bat", "pull-from-github.ps1", "update-nas.bat",
+    "restart-nas-docker.bat"
 )
 
 Write-Host ""
