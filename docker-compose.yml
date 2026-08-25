@@ -1,6 +1,8 @@
 services:
   attend:
-    build: .
+    build:
+      context: .
+      network: host
     container_name: attend
     ports:
       - "8102:8102"

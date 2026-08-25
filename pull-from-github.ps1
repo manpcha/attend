@@ -14,7 +14,7 @@ $files = @(
     "sync-to-nas.bat", "sync-to-nas.ps1", "sync-to-nas.cmd",
     "pull-from-github.bat", "pull-from-github.ps1", "update-nas.bat",
     "restart-nas-docker.bat", "docker-compose.nas.yml",
-    "build-nas-image.bat", "build-nas-image.ps1"
+    "build-nas-image.bat", "build-nas-image.ps1", "nas-update.sh"
 )
 
 Write-Host ""
