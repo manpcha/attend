@@ -1,0 +1,17 @@
+{
+  "name": "attend",
+  "install": "pip install --user -r requirements.txt",
+  "terminals": [
+    {
+      "name": "attend-server",
+      "command": "DATA_DIR=/workspace/data python3 -m uvicorn app:app --host 0.0.0.0 --port 8102",
+      "description": "FastAPI attendance server serving index.html and the JSON file-based API on port 8102."
+    }
+  ],
+  "ports": [
+    {
+      "name": "attend web",
+      "port": 8102
+    }
+  ]
+}
