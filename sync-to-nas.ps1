@@ -17,22 +17,22 @@ Write-Host "========================================"
 Write-Host ""
 
 if (-not (Test-Path (Join-Path $Target "docker-compose.yml"))) {
-    Write-Host "[error] docker-compose.yml not found: $Target"
-    Write-Host "        check T: drive (\\dandycha\docker\attend)"
+    Write-Host "ERROR: docker-compose.yml not found: $Target"
+    Write-Host "       check T: drive (\\dandycha\docker\attend)"
     exit 1
 }
 
 $gitDir = Join-Path $Target ".git"
 if (Test-Path $gitDir) {
-    Write-Host "[attend] git repo found -> git pull"
+    Write-Host "attend: git repo found -> git pull"
     Push-Location $Target
     try {
         git pull origin master
         if ($LASTEXITCODE -ne 0) {
-            Write-Host "[error] git pull failed (check DNS/network)"
+            Write-Host "ERROR: git pull failed (check DNS/network)"
             exit 1
         }
-        Write-Host "[attend] git pull OK"
+        Write-Host "attend: git pull OK"
     }
     finally {
         Pop-Location
@@ -40,19 +40,19 @@ if (Test-Path $gitDir) {
 }
 else {
     if (-not (Test-Path (Join-Path $Source "app.py"))) {
-        Write-Host "[error] source not found: $Source"
+        Write-Host "ERROR: source not found: $Source"
         exit 1
     }
-    Write-Host "[attend] copy files: $Source -> $Target"
+    Write-Host "attend: copy files $Source -> $Target"
     & robocopy $Source $Target /E /XD .git __pycache__ /XF *.pyc /NFL /NDL /NJH /NJS | Out-Null
     if ($LASTEXITCODE -ge 8) {
-        Write-Host "[error] robocopy failed"
+        Write-Host "ERROR: robocopy failed"
         exit 1
     }
-    Write-Host "[attend] copy OK"
+    Write-Host "attend: copy OK"
 }
 
-Write-Host "[attend] restarting docker..."
+Write-Host "attend: restarting docker..."
 Push-Location $Target
 try {
     docker compose up -d
@@ -65,6 +65,6 @@ finally {
 }
 
 Write-Host ""
-Write-Host "[attend] NAS sync done"
-Write-Host "[attend] check: http://NAS-IP:8102/api/status"
+Write-Host "attend: NAS sync done"
+Write-Host "attend: check http://NAS-IP:8102/api/status"
 Write-Host ""

@@ -16,7 +16,7 @@ $files = @(
 )
 
 Write-Host ""
-Write-Host "[attend] GitHub -> $Target"
+Write-Host "attend: GitHub -> $Target"
 Write-Host ""
 
 foreach ($f in $files) {
@@ -25,5 +25,9 @@ foreach ($f in $files) {
 }
 
 Write-Host ""
+<<<<<<< Updated upstream
 Write-Host "[attend] done (data folder unchanged)"
+=======
+Write-Host "attend: done (data folder unchanged)"
+>>>>>>> Stashed changes
 Write-Host ""
