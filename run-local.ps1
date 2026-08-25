@@ -24,27 +24,15 @@ Set-Location $Root
 try {
     python -c "import uvicorn" 2>$null
     if ($LASTEXITCODE -ne 0) {
-<<<<<<< Updated upstream
-        Write-Host "[attend] installing packages..."
-=======
         Write-Host "attend: installing packages..."
->>>>>>> Stashed changes
         python -m pip install -r requirements.txt
     }
 }
 catch {
-<<<<<<< Updated upstream
-    Write-Host "[error] python/uvicorn not available"
-    exit 1
-}
-
-Write-Host "[attend] starting server... keep this window open."
-=======
     Write-Host "ERROR: python/uvicorn not available"
     exit 1
 }
 
 Write-Host "attend: starting server... keep this window open."
->>>>>>> Stashed changes
 Write-Host ""
 python -m uvicorn app:app --host 127.0.0.1 --port 8102

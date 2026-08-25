@@ -27,9 +27,5 @@ foreach ($f in $files) {
 }
 
 Write-Host ""
-<<<<<<< Updated upstream
-Write-Host "[attend] done (data folder unchanged)"
-=======
 Write-Host "attend: done (data folder unchanged)"
->>>>>>> Stashed changes
 Write-Host ""
