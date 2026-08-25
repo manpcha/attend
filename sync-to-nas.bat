@@ -1,3 +1,3 @@
 @echo off
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0sync-to-nas.ps1" %*
+call "%~dp0sync-to-nas.cmd" %*
 exit /b %ERRORLEVEL%

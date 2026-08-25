@@ -17,11 +17,11 @@ alwaysApply: true
 4. 사용자가 **"NAS 반영해줘"** 라고 할 때만 NAS 동기화
 
 ## NAS 동기화
-- NAS 경로: `T:\` (= `\\dandycha\docker\attend`)
-- NAS에 `.git` 있으면: `T:\` 에서 `git pull origin master`
-- NAS에 git 없으면: `D:\mine\apps\attend` → `T:\` 파일 복사
-- 실행: `D:\mine\apps\attend\sync-to-nas.bat` (PowerShell 스크립트 사용, 한글 깨짐 방지)
-- NAS DNS 제약: NAS에서 pip install / docker build 지양. 파일 복사 + `docker compose restart`
+- NAS 공유 폴더: `T:\` (= `\\dandycha\docker\attend`) — **파일 복사만** (PC에서 robocopy)
+- Docker는 **NAS 본체**에서 실행. T: 드라이브에서 `docker` 명령 불가
+- PC: `sync-to-nas.cmd` 로 파일 복사
+- NAS 재시작: DSM Container Manager 또는 `restart-nas-docker.bat` (SSH)
+- NAS DNS 제약: NAS에서 pip install / docker build 지양. 파일 복사 후 컨테이너 restart만
 
 ## 주의
 - Cloud Agent는 `D:\`, `T:\` 에 직접 접근 불가. 로컬 PC에서 스크립트 실행 안내 필요.

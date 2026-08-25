@@ -5,6 +5,7 @@ set "TARGET=T:\"
 
 if not exist "%TARGET%docker-compose.yml" (
     echo ERROR: %TARGET%docker-compose.yml not found
+    echo        connect network drive T: to \\dandycha\docker\attend
     pause
     exit /b 1
 )
@@ -17,19 +18,12 @@ if %ERRORLEVEL% GEQ 8 (
     exit /b 1
 )
 
-echo attend: restart docker
-pushd "%TARGET%"
-docker compose up -d
-docker compose restart attend
-set ERR=%ERRORLEVEL%
-popd
-
-if not "%ERR%"=="0" (
-    echo ERROR: docker failed
-    pause
-    exit /b 1
-)
-
-echo attend: NAS sync done
-echo check: http://NAS-IP:8102/api/status
+echo.
+echo attend: files copied to NAS share
+echo.
+echo NEXT: restart docker ON THE NAS (not on T: drive)
+echo   - DSM Container Manager: restart attend container
+echo   - or SSH: restart-nas-docker.bat
+echo.
+echo check: http://dandycha:8102/api/status
 pause
